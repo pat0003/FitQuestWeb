@@ -84,7 +84,8 @@ CREATE TABLE streak_state (
     streak_tier     SMALLINT NOT NULL DEFAULT 0 CHECK (streak_tier BETWEEN 0 AND 3),
     week_start      DATE NOT NULL DEFAULT CURRENT_DATE,
     workouts_this_week INTEGER NOT NULL DEFAULT 0,
-    best_streak     INTEGER NOT NULL DEFAULT 0
+    best_streak     INTEGER NOT NULL DEFAULT 0,
+    goal_at_week_start INTEGER NOT NULL DEFAULT 3
 );
 
 -- Boss attivi (uno per gruppo muscolare per utente)

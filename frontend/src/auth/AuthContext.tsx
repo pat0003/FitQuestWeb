@@ -12,6 +12,8 @@ interface AuthContextValue extends AuthState {
     bodyWeightKg?: number,
   ) => Promise<void>;
   logout: () => void;
+  // Ricarica i dati utente dal backend (es. dopo PATCH /user/profile in Settings)
+  refreshUser: () => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────
@@ -76,8 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: null, token: null, isAuthenticated: false, isLoading: false });
   };
 
+  // ── refreshUser ──────────────────────────────────────────────
+  const refreshUser = async () => {
+    const { user } = await apiGet<{ user: User }>('/user/profile');
+    setState((s) => ({ ...s, user }));
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

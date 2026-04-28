@@ -6,6 +6,9 @@ import authRouter from './routes/auth';
 import userRouter from './routes/user';
 import exercisesRouter from './routes/exercises';
 import workoutsRouter from './routes/workouts';
+import progressionRouter from './routes/progression';
+import bossesRouter from './routes/bosses';
+import streakRouter from './routes/streak';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -34,6 +37,9 @@ app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/user', userRouter);
 app.use('/api/exercises', exercisesRouter);
 app.use('/api/workouts', workoutsRouter);
+app.use('/api/progress', progressionRouter);
+app.use('/api/bosses', bossesRouter);
+app.use('/api/streak', streakRouter);
 
 // ── Error handler centralizzato (deve essere l'ultimo middleware) ──
 app.use(errorHandler);

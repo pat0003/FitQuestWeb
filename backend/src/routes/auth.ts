@@ -3,6 +3,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { config } from '../config';
+import { rankUpCost } from '../services/progressionService';
+import { bossNameFor } from '../services/bossService';
+import { MuscleGroup } from '../types';
 
 const router = Router();
 const SALT_ROUNDS = 12;
@@ -54,10 +57,21 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       );
     }
 
-    // Inizializza streak state
+    // Inizializza i 7 boss (tier=1, HP = costo rank-up Bronzo→Argento = 1600)
+    // Pre-popolare la riga evita un INSERT lazy nel mezzo del processing del workout.
+    const tier1Hp = rankUpCost(1);
+    for (const group of MUSCLE_GROUPS) {
+      await pool.query(
+        `INSERT INTO bosses (user_id, muscle_group, boss_name, tier, max_hp, current_hp)
+         VALUES ($1, $2, $3, 1, $4, $4)`,
+        [user.id, group, bossNameFor(1, group as MuscleGroup), tier1Hp],
+      );
+    }
+
+    // Inizializza streak state — snapshotta weekly_goal corrente per anti-exploit
     await pool.query(
-      `INSERT INTO streak_state (user_id) VALUES ($1)`,
-      [user.id],
+      `INSERT INTO streak_state (user_id, goal_at_week_start) VALUES ($1, $2)`,
+      [user.id, user.weekly_goal],
     );
 
     // Genera JWT — secret da variabile d'ambiente, mai hardcodato

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { PoolClient } from 'pg';
 import { authMiddleware } from '../middleware/auth';
 import { pool } from '../db/pool';
 import {
@@ -10,8 +11,87 @@ import {
   ExerciseCategory,
   Difficulty,
   MuscleGroup,
+  RankUpEvent,
+  BossUpdate,
 } from '../types';
 import { calcSetXp, validateSetInput } from '../services/xpCalculator';
+import {
+  applyXpToGroup,
+  rankUpCost,
+  ProgressState,
+  BossState,
+  MAX_BAND,
+} from '../services/progressionService';
+import { bossNameFor } from '../services/bossService';
+import {
+  StreakTier,
+  StreakStateInput,
+  processWeekRolloverIfNeeded,
+} from '../services/streakService';
+
+/**
+ * Helper: legge streak_state + users.weekly_goal, applica rollover se necessario,
+ * persiste eventuali modifiche. Ritorna il tier corrente da usare per il calcolo XP.
+ *
+ * Va chiamato DENTRO una transazione (riceve il client). Usa SELECT FOR UPDATE
+ * per evitare race condition con altri sets/complete concorrenti.
+ */
+async function syncStreakAndGetTier(
+  client: PoolClient,
+  userId: string,
+): Promise<{ tier: StreakTier; state: StreakStateInput; weeklyGoal: number }> {
+  const stRes = await client.query<{
+    current_streak: number;
+    streak_tier: StreakTier;
+    week_start: Date;
+    workouts_this_week: number;
+    best_streak: number;
+    goal_at_week_start: number;
+  }>(
+    `SELECT current_streak, streak_tier, week_start, workouts_this_week, best_streak, goal_at_week_start
+     FROM streak_state WHERE user_id = $1 FOR UPDATE`,
+    [userId],
+  );
+  if (stRes.rows.length === 0) {
+    throw new Error('streak_state row mancante per user ' + userId);
+  }
+  const goalRes = await client.query<{ weekly_goal: number }>(
+    `SELECT weekly_goal FROM users WHERE id = $1`,
+    [userId],
+  );
+  const weeklyGoal = goalRes.rows[0].weekly_goal;
+
+  const state: StreakStateInput = {
+    current_streak: stRes.rows[0].current_streak,
+    streak_tier: stRes.rows[0].streak_tier,
+    week_start: stRes.rows[0].week_start,
+    workouts_this_week: stRes.rows[0].workouts_this_week,
+    best_streak: stRes.rows[0].best_streak,
+    goal_at_week_start: stRes.rows[0].goal_at_week_start,
+  };
+
+  const result = processWeekRolloverIfNeeded(state, weeklyGoal, new Date());
+
+  if (result.changed) {
+    await client.query(
+      `UPDATE streak_state
+       SET current_streak = $1, streak_tier = $2, week_start = $3,
+           workouts_this_week = $4, best_streak = $5, goal_at_week_start = $6
+       WHERE user_id = $7`,
+      [
+        result.state.current_streak,
+        result.state.streak_tier,
+        result.state.week_start.toISOString().slice(0, 10),
+        result.state.workouts_this_week,
+        result.state.best_streak,
+        result.state.goal_at_week_start,
+        userId,
+      ],
+    );
+  }
+
+  return { tier: result.state.streak_tier, state: result.state, weeklyGoal };
+}
 
 const router = Router();
 
@@ -228,20 +308,25 @@ router.post(
       return;
     }
 
-    const xp = calcSetXp({
-      category: ctx.category,
-      difficulty: ctx.difficulty,
-      bodyWeightKg: ctx.body_weight_kg,
-      reps: body.reps,
-      weightKg: body.weightKg,
-      seconds: body.seconds,
-      ballastKg: body.ballastKg,
-    });
-
-    // Transazione: INSERT set + UPDATE we.xp_earned + UPDATE workout.total_xp
+    // Transazione: rollover streak + INSERT set + UPDATE totali
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Rollover lazy: se siamo in una nuova settimana ISO, processa la transizione
+      // e leggi il tier corrente da applicare al moltiplicatore XP.
+      const { tier } = await syncStreakAndGetTier(client, userId);
+
+      const xp = calcSetXp({
+        category: ctx.category,
+        difficulty: ctx.difficulty,
+        bodyWeightKg: ctx.body_weight_kg,
+        reps: body.reps,
+        weightKg: body.weightKg,
+        seconds: body.seconds,
+        ballastKg: body.ballastKg,
+        streakTier: tier,
+      });
 
       const setNumRes = await client.query<{ next: number }>(
         `SELECT COALESCE(MAX(set_number), 0) + 1 AS next
@@ -288,54 +373,203 @@ router.post(
 
 // ============================================================
 // POST /api/workouts/:id/complete
-// Chiude il workout — in Fase 2 solo completed_at + xpSummary
-// (rankUps e bossUpdates verranno implementati in Fase 3)
+// Chiude il workout, processa progressione e boss in transazione atomica.
+// Risposta: { workout, xpSummary, rankUps[], bossUpdates[] }
 // ============================================================
 router.post('/:id/complete', async (req: Request, res: Response): Promise<void> => {
   const { userId } = req as AuthRequest;
   const { id } = req.params;
 
-  const wRes = await pool.query<{ completed_at: string | null }>(
+  // Pre-check fuori dalla transazione
+  const wCheck = await pool.query<{ completed_at: string | null }>(
     `SELECT completed_at FROM workouts WHERE id = $1 AND user_id = $2`,
     [id, userId],
   );
-  if (wRes.rows.length === 0) {
+  if (wCheck.rows.length === 0) {
     res.status(404).json({ error: 'Workout non trovato' });
     return;
   }
-  if (wRes.rows[0].completed_at !== null) {
+  if (wCheck.rows[0].completed_at !== null) {
     res.status(400).json({ error: 'Workout già completato' });
     return;
   }
 
-  const updated = await pool.query<Workout>(
-    `UPDATE workouts SET completed_at = NOW() WHERE id = $1
-     RETURNING id, user_id, started_at, completed_at, total_xp, notes`,
-    [id],
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  // XP per gruppo muscolare
-  const aggRes = await pool.query<{ muscle_group: MuscleGroup; xp: number }>(
-    `SELECT e.muscle_group, COALESCE(SUM(we.xp_earned), 0)::int AS xp
-     FROM workout_exercises we
-     JOIN exercises e ON e.id = we.exercise_id
-     WHERE we.workout_id = $1
-     GROUP BY e.muscle_group`,
-    [id],
-  );
+    // 0. Rollover streak (se siamo in nuova settimana ISO) + incremento workouts_this_week.
+    // Va PRIMA di tutto perché un eventuale rollover deve avvenire sullo stato "vecchio"
+    // e il workout corrente conta nella nuova settimana che inizia dopo il rollover.
+    await syncStreakAndGetTier(client, userId);
+    await client.query(
+      `UPDATE streak_state SET workouts_this_week = workouts_this_week + 1
+       WHERE user_id = $1`,
+      [userId],
+    );
 
-  const perMuscleGroup: Partial<Record<MuscleGroup, number>> = {};
-  for (const r of aggRes.rows) perMuscleGroup[r.muscle_group] = r.xp;
+    // 1. Marca completato
+    const updated = await client.query<Workout>(
+      `UPDATE workouts SET completed_at = NOW() WHERE id = $1
+       RETURNING id, user_id, started_at, completed_at, total_xp, notes`,
+      [id],
+    );
 
-  res.json({
-    workout: updated.rows[0],
-    xpSummary: {
-      totalXp: updated.rows[0].total_xp,
-      perMuscleGroup,
-    },
-    rankUps: [],
-    bossUpdates: [],
-  });
+    // 2. XP aggregato per gruppo muscolare in questo workout
+    const aggRes = await client.query<{ muscle_group: MuscleGroup; xp: number }>(
+      `SELECT e.muscle_group, COALESCE(SUM(we.xp_earned), 0)::int AS xp
+       FROM workout_exercises we
+       JOIN exercises e ON e.id = we.exercise_id
+       WHERE we.workout_id = $1
+       GROUP BY e.muscle_group`,
+      [id],
+    );
+
+    const perMuscleGroup: Partial<Record<MuscleGroup, number>> = {};
+    for (const r of aggRes.rows) perMuscleGroup[r.muscle_group] = r.xp;
+
+    const rankUps: RankUpEvent[] = [];
+    const bossUpdates: BossUpdate[] = [];
+
+    // 3. Per ogni gruppo con XP > 0, applica progressione + boss
+    for (const [group, xp] of Object.entries(perMuscleGroup)) {
+      if (!xp || xp <= 0) continue;
+      const muscleGroup = group as MuscleGroup;
+
+      // Carica stato attuale
+      const progRes = await client.query<ProgressState>(
+        `SELECT rank_band, rank_sub, current_xp, total_xp::int
+         FROM muscle_group_progress
+         WHERE user_id = $1 AND muscle_group = $2
+         FOR UPDATE`,
+        [userId, muscleGroup],
+      );
+      if (progRes.rows.length === 0) continue;
+      const progress = progRes.rows[0];
+
+      const bossRes = await client.query<BossState>(
+        `SELECT tier, max_hp, current_hp, defeated FROM bosses
+         WHERE user_id = $1 AND muscle_group = $2 FOR UPDATE`,
+        [userId, muscleGroup],
+      );
+      const initialBoss = bossRes.rows.length > 0 ? bossRes.rows[0] : null;
+      const bossExists = bossRes.rows.length > 0;
+
+      // Factory che produce un nuovo boss quando avviene un rank-up
+      // (richiamata dentro applyXpToGroup quando boss.current_hp <= 0)
+      const nextBossFactory = (newBand: number): BossState | null => {
+        // newBand è la nuova fascia raggiunta. Il boss della NUOVA fascia
+        // ha tier = newBand (rappresenta il rank-up newBand → newBand+1).
+        // Se newBand >= 6 (Diamante) non c'è più rank-up: nessun boss.
+        if (newBand >= MAX_BAND) return null;
+        const hp = rankUpCost(newBand);
+        return { tier: newBand, max_hp: hp, current_hp: hp, defeated: false };
+      };
+
+      // 3a. Calcolo nuova progressione (in memoria, pure function)
+      const result = applyXpToGroup(progress, initialBoss, xp, nextBossFactory);
+
+      // 3b. Persisti progressione
+      await client.query(
+        `UPDATE muscle_group_progress
+         SET total_xp = $1, current_xp = $2, rank_band = $3, rank_sub = $4
+         WHERE user_id = $5 AND muscle_group = $6`,
+        [
+          result.progress.total_xp,
+          result.progress.current_xp,
+          result.progress.rank_band,
+          result.progress.rank_sub,
+          userId,
+          muscleGroup,
+        ],
+      );
+
+      // 3c. Persisti boss
+      if (bossExists) {
+        if (result.boss) {
+          // Aggiorna riga esistente — può essere lo stesso boss (HP scalato)
+          // o un nuovo boss della fascia successiva (tier diverso, defeated=false)
+          const newName =
+            result.boss.tier !== (initialBoss?.tier ?? -1)
+              ? bossNameFor(result.boss.tier, muscleGroup)
+              : null; // nome invariato → non lo tocchiamo
+          if (newName) {
+            await client.query(
+              `UPDATE bosses
+               SET tier = $1, boss_name = $2, max_hp = $3, current_hp = $4,
+                   defeated = false, defeated_at = NULL
+               WHERE user_id = $5 AND muscle_group = $6`,
+              [
+                result.boss.tier,
+                newName,
+                result.boss.max_hp,
+                result.boss.current_hp,
+                userId,
+                muscleGroup,
+              ],
+            );
+          } else {
+            await client.query(
+              `UPDATE bosses
+               SET current_hp = $1, defeated = $2,
+                   defeated_at = CASE WHEN $2 THEN NOW() ELSE defeated_at END
+               WHERE user_id = $3 AND muscle_group = $4`,
+              [result.boss.current_hp, result.boss.defeated, userId, muscleGroup],
+            );
+          }
+        } else if (result.bossDefeated) {
+          // boss == null e bossDefeated == true → Diamante raggiunto.
+          // Marca l'ultimo boss come defeated.
+          await client.query(
+            `UPDATE bosses SET defeated = true, defeated_at = NOW(), current_hp = 0
+             WHERE user_id = $1 AND muscle_group = $2`,
+            [userId, muscleGroup],
+          );
+        }
+      }
+
+      // 3d. Accumula eventi per la risposta
+      for (const ev of result.rankUps) {
+        rankUps.push({
+          muscle_group: muscleGroup,
+          fromBand: ev.fromBand,
+          fromSub: ev.fromSub,
+          toBand: ev.toBand,
+          toSub: ev.toSub,
+        });
+      }
+      // Boss update SOLO se il gruppo era a sub 3 (cioè il boss è stato toccato)
+      if (initialBoss && progress.rank_sub === 3 && !initialBoss.defeated) {
+        const damage = initialBoss.current_hp - (result.boss?.current_hp ?? 0);
+        bossUpdates.push({
+          muscle_group: muscleGroup,
+          boss_name: bossNameFor(initialBoss.tier, muscleGroup),
+          tier: initialBoss.tier,
+          current_hp: result.boss?.current_hp ?? 0,
+          max_hp: initialBoss.max_hp,
+          defeated: result.bossDefeated,
+          damage_dealt: Math.max(0, damage),
+        });
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      workout: updated.rows[0],
+      xpSummary: {
+        totalXp: updated.rows[0].total_xp,
+        perMuscleGroup,
+      },
+      rankUps,
+      bossUpdates,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 export default router;

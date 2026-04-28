@@ -60,3 +60,60 @@ export interface ExerciseSet {
   ballast_kg: number | null;
   xp_earned: number;
 }
+
+export interface MuscleGroupProgress {
+  user_id: string;
+  muscle_group: MuscleGroup;
+  total_xp: number;
+  current_xp: number;
+  rank_band: number; // 1..6
+  rank_sub: number; // 1..3
+}
+
+export interface Boss {
+  user_id: string;
+  muscle_group: MuscleGroup;
+  boss_name: string;
+  tier: number; // 1..5
+  max_hp: number;
+  current_hp: number;
+  defeated: boolean;
+  defeated_at: string | null;
+}
+
+export interface RankUpEvent {
+  muscle_group: MuscleGroup;
+  fromBand: number;
+  fromSub: number;
+  toBand: number;
+  toSub: number;
+}
+
+export interface BossUpdate {
+  muscle_group: MuscleGroup;
+  boss_name: string;
+  tier: number;
+  current_hp: number;
+  max_hp: number;
+  defeated: boolean;
+  damage_dealt: number;
+}
+
+export interface StreakStateRow {
+  current_streak: number;
+  streak_tier: 0 | 1 | 2 | 3;
+  week_start: Date;
+  workouts_this_week: number;
+  best_streak: number;
+  goal_at_week_start: number;
+}
+
+export interface StreakSummary {
+  current_streak: number;
+  streak_tier: 0 | 1 | 2 | 3;
+  weekly_goal: number;
+  workouts_this_week: number;
+  best_streak: number;
+  bonus_pct: number;
+  week_start: string; // ISO date
+}

@@ -94,9 +94,100 @@ export interface XpSummary {
   perMuscleGroup: Partial<Record<MuscleGroup, number>>;
 }
 
+// ============================================================
+// Progressione + Boss
+// ============================================================
+
+export const RANK_BAND_NAMES = [
+  'Bronzo',
+  'Argento',
+  'Oro',
+  'Giada',
+  'Platino',
+  'Diamante',
+] as const;
+
+export const RANK_BAND_COLORS = [
+  '#CD7F32',
+  '#A0A0A0',
+  '#B8960C',
+  '#00A86B',
+  '#7B7B7B',
+  '#3FACC6',
+] as const;
+
+export interface RankInfo {
+  band: number;
+  sub: number;
+  displayName: string;
+  color: string;
+}
+
+export interface BossSummary {
+  tier: number;
+  boss_name: string;
+  max_hp: number;
+  current_hp: number;
+  defeated: boolean;
+}
+
+export interface MuscleGroupProgress {
+  muscle_group: MuscleGroup;
+  total_xp: number;
+  current_xp: number;
+  rank_band: number;
+  rank_sub: number;
+  rankInfo: RankInfo;
+  xpToNext: number;
+  isAtRankUp: boolean;
+  isMaxRank: boolean;
+  boss: BossSummary | null;
+}
+
+export interface Boss {
+  muscle_group: MuscleGroup;
+  boss_name: string;
+  tier: number;
+  max_hp: number;
+  current_hp: number;
+  defeated: boolean;
+  defeated_at: string | null;
+  rank_band: number;
+  rank_sub: number;
+  isActive: boolean;
+}
+
+export interface RankUpEvent {
+  muscle_group: MuscleGroup;
+  fromBand: number;
+  fromSub: number;
+  toBand: number;
+  toSub: number;
+}
+
+export interface BossUpdate {
+  muscle_group: MuscleGroup;
+  boss_name: string;
+  tier: number;
+  current_hp: number;
+  max_hp: number;
+  defeated: boolean;
+  damage_dealt: number;
+}
+
+export interface StreakSummary {
+  current_streak: number;
+  streak_tier: 0 | 1 | 2 | 3;
+  weekly_goal: number;
+  workouts_this_week: number;
+  best_streak: number;
+  bonus_pct: number;
+  week_start: string;
+}
+
 export interface CompleteWorkoutResponse {
   workout: Workout;
   xpSummary: XpSummary;
-  rankUps: unknown[];
-  bossUpdates: unknown[];
+  rankUps: RankUpEvent[];
+  bossUpdates: BossUpdate[];
 }
