@@ -15,25 +15,21 @@ router.use((req: Request, res: Response, next: NextFunction) =>
 // ============================================================
 router.get('/profile', async (req: Request, res: Response): Promise<void> => {
   const { userId } = req as AuthRequest;
-  try {
-    const result = await pool.query<{
-      id: string; username: string; email: string;
-      body_weight_kg: number; weekly_goal: number; created_at: string;
-    }>(
-      `SELECT id, username, email, body_weight_kg, weekly_goal, created_at
-       FROM users WHERE id = $1`,
-      [userId],
-    );
+  const result = await pool.query<{
+    id: string; username: string; email: string;
+    body_weight_kg: number; weekly_goal: number; created_at: string;
+  }>(
+    `SELECT id, username, email, body_weight_kg, weekly_goal, created_at
+     FROM users WHERE id = $1`,
+    [userId],
+  );
 
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Utente non trovato' });
-      return;
-    }
-
-    res.json({ user: result.rows[0] });
-  } catch (err) {
-    throw err;
+  if (result.rows.length === 0) {
+    res.status(404).json({ error: 'Utente non trovato' });
+    return;
   }
+
+  res.json({ user: result.rows[0] });
 });
 
 // ============================================================
@@ -41,30 +37,26 @@ router.get('/profile', async (req: Request, res: Response): Promise<void> => {
 // ============================================================
 router.patch('/profile', async (req: Request, res: Response): Promise<void> => {
   const { userId } = req as AuthRequest;
-  try {
-    const { bodyWeightKg, weeklyGoal } = req.body as {
-      bodyWeightKg?: number;
-      weeklyGoal?: number;
-    };
+  const { bodyWeightKg, weeklyGoal } = req.body as {
+    bodyWeightKg?: number;
+    weeklyGoal?: number;
+  };
 
-    // COALESCE: aggiorna solo i campi presenti nella richiesta
-    const result = await pool.query<{
-      id: string; username: string; email: string;
-      body_weight_kg: number; weekly_goal: number; updated_at: string;
-    }>(
-      `UPDATE users
-       SET body_weight_kg = COALESCE($1, body_weight_kg),
-           weekly_goal    = COALESCE($2, weekly_goal),
-           updated_at     = NOW()
-       WHERE id = $3
-       RETURNING id, username, email, body_weight_kg, weekly_goal, updated_at`,
-      [bodyWeightKg ?? null, weeklyGoal ?? null, userId],
-    );
+  // COALESCE: aggiorna solo i campi presenti nella richiesta
+  const result = await pool.query<{
+    id: string; username: string; email: string;
+    body_weight_kg: number; weekly_goal: number; updated_at: string;
+  }>(
+    `UPDATE users
+     SET body_weight_kg = COALESCE($1, body_weight_kg),
+         weekly_goal    = COALESCE($2, weekly_goal),
+         updated_at     = NOW()
+     WHERE id = $3
+     RETURNING id, username, email, body_weight_kg, weekly_goal, updated_at`,
+    [bodyWeightKg ?? null, weeklyGoal ?? null, userId],
+  );
 
-    res.json({ user: result.rows[0] });
-  } catch (err) {
-    throw err;
-  }
+  res.json({ user: result.rows[0] });
 });
 
 export default router;

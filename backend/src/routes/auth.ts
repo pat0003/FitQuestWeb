@@ -100,53 +100,50 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 // POST /api/auth/login
 // ============================================================
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password } = req.body as { email?: string; password?: string };
+  const { email, password } = req.body as { email?: string; password?: string };
 
-    if (!email || !password) {
-      res.status(400).json({ error: 'email e password sono obbligatori' });
-      return;
-    }
-
-    // Cerca utente per email
-    const result = await pool.query<{
-      id: string; username: string; email: string;
-      password_hash: string; body_weight_kg: number; weekly_goal: number;
-    }>(
-      `SELECT id, username, email, password_hash, body_weight_kg, weekly_goal
-       FROM users WHERE email = $1`,
-      [email.trim().toLowerCase()],
-    );
-
-    // Stesso messaggio se utente non esiste O password sbagliata — anti-enumeration
-    const INVALID_MSG = 'Credenziali non valide';
-
-    if (result.rows.length === 0) {
-      res.status(401).json({ error: INVALID_MSG });
-      return;
-    }
-
-    const user = result.rows[0];
-    const passwordValid = await bcrypt.compare(password, user.password_hash);
-
-    if (!passwordValid) {
-      res.status(401).json({ error: INVALID_MSG });
-      return;
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, username: user.username },
-      config.jwtSecret,
-      { expiresIn: '24h' },
-    );
-
-    // Rimuovi password_hash dalla risposta
-    const { password_hash: _omit, ...userWithoutHash } = user;
-
-    res.json({ token, user: userWithoutHash });
-  } catch (err) {
-    throw err;
+  if (!email || !password) {
+    res.status(400).json({ error: 'email e password sono obbligatori' });
+    return;
   }
+
+  // Cerca utente per email
+  const result = await pool.query<{
+    id: string; username: string; email: string;
+    password_hash: string; body_weight_kg: number; weekly_goal: number;
+  }>(
+    `SELECT id, username, email, password_hash, body_weight_kg, weekly_goal
+     FROM users WHERE email = $1`,
+    [email.trim().toLowerCase()],
+  );
+
+  // Stesso messaggio se utente non esiste O password sbagliata — anti-enumeration
+  const INVALID_MSG = 'Credenziali non valide';
+
+  if (result.rows.length === 0) {
+    res.status(401).json({ error: INVALID_MSG });
+    return;
+  }
+
+  const user = result.rows[0];
+  const passwordValid = await bcrypt.compare(password, user.password_hash);
+
+  if (!passwordValid) {
+    res.status(401).json({ error: INVALID_MSG });
+    return;
+  }
+
+  const token = jwt.sign(
+    { userId: user.id, username: user.username },
+    config.jwtSecret,
+    { expiresIn: '24h' },
+  );
+
+  // Rimuovi password_hash dalla risposta
+  const { password_hash: _omit, ...userWithoutHash } = user;
+  void _omit;
+
+  res.json({ token, user: userWithoutHash });
 });
 
 export default router;
