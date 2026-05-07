@@ -97,6 +97,7 @@ Gli utenti demo sono pre-creati con `docker compose up`:
 
 | Email                    | Password    | Note                        |
 |--------------------------|-------------|------------------------------|
+| `demo@fitquest.dev`      | `Demo1234!` | Utente demo principale       |
 | `fase3@fitquest.dev`     | `Test1234!` | Utente base con workout      |
 | `fase4@fitquest.dev`     | `Test1234!` | Utente con progressione      |
 
