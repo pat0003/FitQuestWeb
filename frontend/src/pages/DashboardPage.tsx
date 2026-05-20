@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { listProgress } from '../api/progression';
+import { listProgress, getStreak } from '../api/client';
 import { listWorkouts } from '../api/workouts';
-import { getStreak } from '../api/streak';
 import { MuscleGroupProgress, StreakSummary, Workout } from '../types';
 import { XPBar } from '../components/XPBar';
 import { RankBadge } from '../components/RankBadge';

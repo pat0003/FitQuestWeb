@@ -6,7 +6,7 @@ import {
   MUSCLE_GROUPS,
   EXERCISE_CATEGORIES,
 } from '../types';
-import { listExercises } from '../api/exercises';
+import { listExercises } from '../api/client';
 
 interface Props {
   onPick: (exercise: Exercise) => void;

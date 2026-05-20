@@ -51,3 +51,33 @@ export const apiPost = <T>(path: string, body: unknown) =>
 
 export const apiPatch = <T>(path: string, body: unknown) =>
   apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+
+/* ── Bosses ─────────────────────────────────────────────── */
+
+import { Boss, StreakSummary, MuscleGroup, MuscleGroupProgress, Exercise, ExerciseCategory } from '../types';
+
+export const listBosses = () => apiGet<Boss[]>('/bosses');
+
+/* ── Streak ─────────────────────────────────────────────── */
+
+export const getStreak = () => apiGet<StreakSummary>('/streak');
+
+/* ── Progression ────────────────────────────────────────── */
+
+export const listProgress = () => apiGet<MuscleGroupProgress[]>('/progress');
+
+export const getProgressDetail = (group: MuscleGroup) =>
+  apiGet<MuscleGroupProgress>(`/progress/${group}`);
+
+/* ── Exercises ──────────────────────────────────────────── */
+
+export function listExercises(filters?: {
+  muscleGroup?: MuscleGroup;
+  category?: ExerciseCategory;
+}): Promise<Exercise[]> {
+  const params = new URLSearchParams();
+  if (filters?.muscleGroup) params.set('muscleGroup', filters.muscleGroup);
+  if (filters?.category) params.set('category', filters.category);
+  const qs = params.toString();
+  return apiGet<Exercise[]>(`/exercises${qs ? `?${qs}` : ''}`);
+}

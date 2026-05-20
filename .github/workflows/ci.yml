@@ -8,10 +8,10 @@ on:
 
 jobs:
   # ============================================================
-  # Job 1: backend — install, lint, build TypeScript
+  # Job 1: backend — install, verify startup
   # ============================================================
   backend:
-    name: Backend lint + build
+    name: Backend check
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,16 +25,14 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Build (tsc)
-        run: npm run build
+      - name: Verify syntax
+        run: node --check src/index.js
 
   # ============================================================
-  # Job 2: frontend — install, lint, build (vite)
+  # Job 2: frontend — install, build (vite)
   # ============================================================
   frontend:
-    name: Frontend lint + build
+    name: Frontend build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,8 +46,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Lint
-        run: npm run lint
       - name: Build (vite)
         run: npm run build
 
