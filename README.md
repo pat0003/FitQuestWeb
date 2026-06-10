@@ -155,10 +155,10 @@ FitQuestWeb/
 │   ├── seed_exercises.sql         # 125 esercizi pre-popolati
 │   └── 03_alter.sql               # Migrazioni
 ├── docs/
-│   ├── FitQuestWeb_Dev_Spec.md    # Specifica tecnica completa
 │   ├── api.md                     # Documentazione API
 │   ├── architecture.md            # Diagrammi Mermaid
-│   └── presentation-guide.md     # Guida presentazione
+│   ├── presentation-guide.md     # Guida presentazione
+│   └── reference/                 # Codice originale progetto mobile
 ├── .github/workflows/ci.yml      # Pipeline CI/CD
 ├── docker-compose.yml             # Orchestrazione 3 servizi
 ├── DEPLOY.md                      # Guida deploy locale + cloud
