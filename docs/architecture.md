@@ -9,7 +9,7 @@ graph TB
     end
 
     subgraph Frontend["Frontend (Nginx :80)"]
-        SPA[React SPA<br/>React 18 + TypeScript + Tailwind]
+        SPA[React SPA<br/>React 18 + Tailwind]
     end
 
     subgraph Backend["Backend (Node.js :3000)"]
@@ -219,8 +219,8 @@ flowchart LR
     end
 
     subgraph Jobs["GitHub Actions"]
-        BE_JOB["Backend Job<br/>npm install → lint → build"]
-        FE_JOB["Frontend Job<br/>npm install → lint → build"]
+        BE_JOB["Backend Job<br/>npm ci → syntax check"]
+        FE_JOB["Frontend Job<br/>npm ci → build"]
         DOCKER_JOB["Docker Job<br/>docker compose build"]
     end
 

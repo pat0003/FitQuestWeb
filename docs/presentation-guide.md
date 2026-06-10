@@ -34,8 +34,8 @@ Aprire `docs/architecture.md` su GitHub (o mostrare il diagramma #1 in anteprima
 **Punti da toccare:**
 - Perché **PostgreSQL** e non MongoDB → dati relazionali, transazioni ACID necessarie
 - Perché **JWT** e non sessioni → stateless, no session store, header-based (no CSRF)
-- Perché **TypeScript** sia frontend che backend → type safety, refactoring sicuro
-- Perché **Docker multi-stage** → immagini leggere, stesso ambiente ovunque
+- Perché **JavaScript (ESM)** al backend → nessun build step, il server gira direttamente con `node src/index.js`
+- Perché **Docker multi-stage solo per il frontend** → build Vite + Nginx in un'immagine leggera; il backend usa un Dockerfile single-stage (7 righe)
 - Mostrare il diagramma ER (schema dati: 7 tabelle, relazioni chiare)
 
 ---
@@ -102,13 +102,13 @@ Aprire `docs/architecture.md` su GitHub (o mostrare il diagramma #1 in anteprima
 
 **Docker** (30 sec)
 - `docker compose up --build` → 3 container pronti
-- Multi-stage build: immagini ~150 MB
+- Frontend: multi-stage build (Vite + Nginx); backend: single-stage (Node diretto, 7 righe)
 - Volume PostgreSQL persistente; healthcheck prima di avviare il backend
 
 **CI/CD GitHub Actions** (30 sec)
 - Pipeline su ogni push/PR a main
-- 3 job: backend lint+build, frontend lint+build, docker compose build (gating)
-- Se lint o TypeScript fallisce, il push viene bloccato
+- 3 job: backend syntax check, frontend build, docker compose build (gating)
+- Se il build frontend fallisce o il backend ha errori di sintassi, il push viene bloccato
 
 ---
 
@@ -133,10 +133,10 @@ Aprire `docs/architecture.md` su GitHub (o mostrare il diagramma #1 in anteprima
 | "Perché JWT e non cookie di sessione?" | Stateless, no CSRF (token in header), facile da usare con SPA |
 | "Come proteggi da SQL injection?" | Prepared statements via `pg` driver — mai concatenazione di stringhe |
 | "Cosa fa il middleware auth?" | Verifica JWT, estrae `userId` e lo aggiunge a `req`, altrimenti 401 |
-| "Perché Docker multi-stage?" | Stage builder ha dev deps (tsc, eslint); stage runtime solo prod deps — immagine più piccola e sicura |
+| "Perché Docker multi-stage per il frontend?" | Stage builder compila React con Vite; stage runtime serve i file statici con Nginx — immagine leggera e sicura. Il backend non ha build step, quindi usa un Dockerfile single-stage |
 | "Come funziona il boss?" | Esiste una riga per utente+gruppo; HP = costo rank-up della fascia; XP del workout completato infligge danno proporzionale |
 | "Cosa succede se il token scade durante una sessione?" | Il client riceve 401, `AuthContext` fa logout automatico e reindirizza al login |
-| "Hai testato il codice?" | Lint + TypeScript strict su ogni commit via CI. Test unitari non inclusi (fuori scope del corso) ma `progressionService` e `streakService` sono pure functions testabili |
+| "Hai testato il codice?" | Syntax check backend + build Vite frontend su ogni commit via CI. Test unitari non inclusi (fuori scope del corso) ma `progressionService` e `streakService` sono pure functions testabili |
 
 ---
 

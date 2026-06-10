@@ -97,9 +97,9 @@ Usare commenti di questo tipo dove il codice è derivato dal progetto mobile.
 
 | Layer | Tecnologia | Motivazione |
 |-------|-----------|-------------|
-| Frontend | React 18 + Vite + TypeScript | SPA moderna, hot reload veloce, tipizzazione forte |
+| Frontend | React 18 + Vite + TypeScript | SPA moderna, hot reload veloce, Vite gestisce TypeScript nativamente |
 | Styling | Tailwind CSS | Utility-first, dark mode nativo, prototipazione rapida |
-| Backend | Node.js + Express + TypeScript | Stessa lingua del frontend, framework maturo per API REST |
+| Backend | Node.js + Express + JavaScript (ESM) | Nessun build step, il server gira direttamente con `node`, framework maturo per API REST |
 | Database | PostgreSQL 16 | Standard cloud-native, SQL relazionale, supporto JSONB |
 | ORM/Query | pg (node-postgres) | Driver diretto, prepared statements per sicurezza |
 | Auth | JWT (jsonwebtoken) + bcrypt | Stateless, scalabile, argomento del corso |
@@ -123,27 +123,28 @@ fitquest-web/
 │       └── ci.yml               # Pipeline CI/CD
 │
 ├── frontend/
-│   ├── Dockerfile
+│   ├── Dockerfile               # Multi-stage: Vite build → Nginx
 │   ├── nginx.conf               # Configurazione Nginx per SPA
 │   ├── package.json
 │   ├── tsconfig.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
+│   ├── vite.config.js
+│   ├── tailwind.config.js
 │   ├── index.html
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
 │       ├── api/                 # Client HTTP, interceptor JWT
-│       │   └── client.ts
+│       │   ├── client.ts
+│       │   └── workouts.ts
 │       ├── auth/                # Context, hook, guard
 │       │   ├── AuthContext.tsx
 │       │   └── PrivateRoute.tsx
 │       ├── components/          # Componenti riutilizzabili
-│       │   ├── Layout.tsx
-│       │   ├── Navbar.tsx
 │       │   ├── XPBar.tsx
+│       │   ├── RankBadge.tsx
 │       │   ├── BossCard.tsx
 │       │   ├── StreakBadge.tsx
+│       │   ├── SetLogger.tsx
 │       │   └── ExerciseSelector.tsx
 │       ├── pages/               # Schermate principali
 │       │   ├── LoginPage.tsx
@@ -152,43 +153,33 @@ fitquest-web/
 │       │   ├── WorkoutPage.tsx
 │       │   ├── ProgressionPage.tsx
 │       │   └── SettingsPage.tsx
-│       ├── hooks/               # Custom hooks
-│       │   └── useWorkout.ts
-│       ├── types/               # Tipi TypeScript condivisi
-│       │   └── index.ts
-│       └── utils/               # Utility pure
-│           └── xp.ts
+│       └── types/               # Tipi TypeScript condivisi
+│           └── index.ts
 │
 ├── backend/
-│   ├── Dockerfile
+│   ├── Dockerfile               # Single-stage: Node.js diretto
 │   ├── package.json
-│   ├── tsconfig.json
 │   └── src/
-│       ├── index.ts             # Entry point, setup Express
-│       ├── config.ts            # Variabili ambiente, costanti
+│       ├── index.js             # Entry point, setup Express
+│       ├── config.js            # Variabili ambiente, costanti
 │       ├── middleware/
-│       │   ├── auth.ts          # Middleware JWT
-│       │   ├── cors.ts          # Configurazione CORS
-│       │   └── errorHandler.ts  # Error handling centralizzato
+│       │   ├── auth.js          # Middleware JWT
+│       │   └── errorHandler.js  # Error handling centralizzato
 │       ├── routes/
-│       │   ├── auth.ts          # POST /auth/register, /auth/login
-│       │   ├── exercises.ts     # GET /exercises
-│       │   ├── workouts.ts      # CRUD workout + sets
-│       │   ├── progress.ts      # GET progressione gruppi
-│       │   ├── streak.ts        # GET streak corrente
-│       │   └── bosses.ts        # GET boss attivi
+│       │   ├── auth.js          # POST /auth/register, /auth/login
+│       │   ├── exercises.js     # GET /exercises
+│       │   ├── workouts.js      # CRUD workout + sets
+│       │   ├── progression.js   # GET progressione gruppi
+│       │   ├── streak.js        # GET streak corrente
+│       │   ├── user.js          # GET/PATCH profilo utente
+│       │   └── bosses.js        # GET boss attivi
 │       ├── services/            # Business logic
-│       │   ├── xpCalculator.ts  # Formule XP (da FitQuest)
-│       │   ├── progressionService.ts
-│       │   ├── streakService.ts
-│       │   └── bossService.ts
-│       ├── db/
-│       │   ├── pool.ts          # Connection pool PostgreSQL
-│       │   ├── migrations/      # SQL migrations
-│       │   │   └── 001_init.sql
-│       │   └── seed.ts          # Seed libreria esercizi
-│       └── types/
-│           └── index.ts         # Tipi condivisi
+│       │   ├── xpCalculator.js  # Formule XP (da FitQuest)
+│       │   ├── progressionService.js
+│       │   ├── streakService.js
+│       │   └── bossService.js
+│       └── db/
+│           └── pool.js          # Connection pool PostgreSQL
 │
 └── database/
     └── init.sql                 # Script inizializzazione DB (usato da Docker)
@@ -216,8 +207,8 @@ fitquest-web/
 
 1. L'utente interagisce con la SPA React nel browser
 2. Il frontend invia una richiesta HTTP con JWT nell'header `Authorization: Bearer <token>`
-3. Il backend Express riceve la richiesta, il middleware `auth.ts` verifica il JWT
-4. Il route handler chiama il service appropriato (es. `xpCalculator.ts`)
+3. Il backend Express riceve la richiesta, il middleware `auth.js` verifica il JWT
+4. Il route handler chiama il service appropriato (es. `xpCalculator.js`)
 5. Il service esegue query parametrizzate (prepared statements) verso PostgreSQL
 6. La risposta JSON torna al frontend, che aggiorna lo stato React
 
@@ -357,7 +348,7 @@ La libreria esercizi (125 esercizi) viene importata dal file Excel del progetto 
 
 2. **Login** (`POST /api/auth/login`): l'utente invia email + password. Il backend verifica con `bcrypt.compare()`. Se valido, genera e ritorna un JWT.
 
-3. **Richieste autenticate**: il frontend include il JWT nell'header `Authorization: Bearer <token>`. Il middleware `auth.ts` verifica la firma e estrae `userId`.
+3. **Richieste autenticate**: il frontend include il JWT nell'header `Authorization: Bearer <token>`. Il middleware `auth.js` verifica la firma e estrae `userId`.
 
 ### 6.2 Struttura del JWT
 
@@ -646,23 +637,16 @@ volumes:
   pgdata:
 ```
 
-### 10.2 Dockerfile backend
+### 10.2 Dockerfile backend (single-stage)
 
 ```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
 FROM node:20-alpine
 WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
+RUN npm ci --omit=dev
+COPY src ./src
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["node", "src/index.js"]
 ```
 
 ### 10.3 Dockerfile frontend
@@ -708,7 +692,7 @@ server {
 ### 11.1 Pipeline `.github/workflows/ci.yml`
 
 ```yaml
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
@@ -717,49 +701,51 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test-backend:
+  backend:
+    name: Backend check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
-        working-directory: ./backend
         run: npm ci
-      - name: Lint
-        working-directory: ./backend
-        run: npm run lint
-      - name: Build
-        working-directory: ./backend
-        run: npm run build
-      - name: Test
-        working-directory: ./backend
-        run: npm test
+      - name: Verify syntax
+        run: node --check src/index.js
 
-  lint-and-build-frontend:
+  frontend:
+    name: Frontend build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
-        working-directory: ./frontend
         run: npm ci
-      - name: Lint
-        working-directory: ./frontend
-        run: npm run lint
-      - name: Build
-        working-directory: ./frontend
+      - name: Build (vite)
         run: npm run build
 
   docker-build:
-    needs: [lint-and-test-backend, lint-and-build-frontend]
+    name: Docker images build
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Docker images
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build all images via compose
         run: docker compose build
 ```
 
@@ -797,7 +783,7 @@ Le istruzioni dettagliate vanno nel README finale.
 
 - [ ] Inizializzare repo GitHub
 - [ ] Creare struttura cartelle
-- [ ] Setup backend: Express + TypeScript + nodemon
+- [ ] Setup backend: Express + JavaScript (ESM)
 - [ ] Setup frontend: Vite + React + TypeScript + Tailwind
 - [ ] Setup docker-compose con PostgreSQL
 - [ ] Creare `database/init.sql` con lo schema
@@ -818,14 +804,14 @@ Le istruzioni dettagliate vanno nel README finale.
 - [ ] Seed script: importare 125 esercizi dal file Excel
 - [ ] Implementare `GET /exercises` con filtri
 - [ ] Implementare flusso workout: create → add exercise → log set → complete
-- [ ] Implementare `xpCalculator.ts` (4 formule, da FitQuest)
+- [ ] Implementare `xpCalculator.js` (4 formule, da FitQuest)
 - [ ] Frontend: pagina Workout con ExerciseSelector e SetLogger
 - [ ] Verificare: workflow completo workout → XP calcolati
 
 ### FASE 3 — Progressione + Boss
 
-- [ ] Implementare `progressionService.ts` (costi, avanzamento ranghi)
-- [ ] Implementare `bossService.ts` (attivazione, danno, sconfitta)
+- [ ] Implementare `progressionService.js` (costi, avanzamento ranghi)
+- [ ] Implementare `bossService.js` (attivazione, danno, sconfitta)
 - [ ] Aggiornare endpoint `/workouts/:id/complete` per processare XP → progressione → boss
 - [ ] Frontend: pagina Progressione con 7 gruppi, XPBar, ranghi
 - [ ] Frontend: BossCard nella Dashboard
@@ -833,7 +819,7 @@ Le istruzioni dettagliate vanno nel README finale.
 
 ### FASE 4 — Streak + Dashboard
 
-- [ ] Implementare `streakService.ts` (logica settimanale, tier, reset)
+- [ ] Implementare `streakService.js` (logica settimanale, tier, reset)
 - [ ] Implementare cron job o check al completamento workout
 - [ ] Frontend: Dashboard completa (streak, boss, progressi, ultimo workout)
 - [ ] Frontend: pagina Impostazioni (peso, obiettivo settimanale)
@@ -842,7 +828,7 @@ Le istruzioni dettagliate vanno nel README finale.
 ### FASE 5 — Docker + CI/CD + Deploy
 
 - [ ] Scrivere Dockerfile frontend (multi-stage con Nginx)
-- [ ] Scrivere Dockerfile backend (multi-stage)
+- [ ] Scrivere Dockerfile backend (single-stage)
 - [ ] Testare `docker compose up --build` da zero
 - [ ] Scrivere pipeline GitHub Actions (ci.yml)
 - [ ] Verificare pipeline su push
@@ -930,12 +916,12 @@ Quando implementi questo progetto:
 4. **Prepared statements OVUNQUE** — mai concatenare input utente nelle query SQL
 5. **bcrypt per le password** — mai salvare in chiaro, mai usare MD5/SHA
 6. Il JWT secret viene da variabile d'ambiente — mai hardcodato nel codice
-7. Ogni endpoint autenticato passa per il middleware `auth.ts`
+7. Ogni endpoint autenticato passa per il middleware `auth.js`
 8. Il CORS deve specificare le origini esatte — mai `*` in produzione
-9. I Dockerfile devono essere multi-stage (build + runtime)
+9. Il Dockerfile frontend è multi-stage (build + Nginx); il backend è single-stage (Node diretto)
 10. Il docker-compose deve funzionare con un solo `docker compose up --build`
 11. Aggiungi commenti `// Adattato da FitQuest (progetto personale)` dove il codice è derivato
-12. TypeScript strict mode attivo — no `any` impliciti
+12. TypeScript nel frontend (Vite lo gestisce nativamente); backend in JavaScript puro (ESM)
 13. Ogni route handler deve avere error handling con try/catch
 14. Le risposte API seguono il formato `{ data }` per successo, `{ error: "messaggio" }` per errori
 15. Il seed degli esercizi deve eseguirsi automaticamente al primo avvio

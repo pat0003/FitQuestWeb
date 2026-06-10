@@ -107,7 +107,7 @@ Per supportare anche localhost in dev (multi-origine):
 ```
 CORS_ORIGIN=https://fitquestweb-frontend.up.railway.app,http://localhost
 ```
-Il backend supporta liste CSV (vedi `backend/src/config.ts`).
+Il backend supporta liste CSV (vedi `backend/src/config.js`).
 
 ### Step 5: Auto-deploy
 Railway è già collegato al repo: ogni push su `main` triggera un rebuild automatico di entrambi i servizi.
