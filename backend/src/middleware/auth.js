@@ -1,14 +1,7 @@
-import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config';
-import { AuthRequest } from '../types';
+import { config } from '../config.js';
 
-interface JwtPayload {
-  userId: string;
-  username: string;
-}
-
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
+export function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
 
   if (!header?.startsWith('Bearer ')) {
@@ -18,7 +11,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   try {
     const token = header.split(' ')[1];
-    const payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
+    const payload = jwt.verify(token, config.jwtSecret);
     req.userId = payload.userId;
     req.username = payload.username;
     next();

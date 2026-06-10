@@ -25,12 +25,12 @@ Diagrammi dettagliati (deploy, ER, flusso workout, progressione, CI/CD): [docs/a
 | Frontend   | React 18 + TypeScript  | Component-based UI, type safety                       |
 | Styling    | Tailwind CSS 3         | Utility-first, nessun CSS custom da mantenere         |
 | Build      | Vite 6                 | HMR veloce, build ottimizzata                         |
-| Backend    | Express + TypeScript   | Maturo, ampio ecosistema, facile da testare            |
+| Backend    | Express + JavaScript   | Maturo, ampio ecosistema, esecuzione diretta con Node  |
 | Database   | PostgreSQL 16          | Relazionale, transazioni ACID, prepared statements    |
 | Auth       | JWT (jsonwebtoken)     | Stateless, nessun session store server-side            |
 | Password   | bcrypt (12 rounds)     | Hashing sicuro, resistente a brute-force              |
 | Container  | Docker + Compose       | Ambiente riproducibile, deploy semplificato            |
-| CI/CD      | GitHub Actions         | Lint + build + Docker build automatici                 |
+| CI/CD      | GitHub Actions         | Build + Docker build automatici                        |
 
 ## Prerequisiti
 
@@ -79,7 +79,7 @@ npm install
 npm run dev
 ```
 
-Il server parte su `http://localhost:3000`.
+Il server parte su `http://localhost:3000` con watch mode (riavvio automatico su modifica).
 
 **3. Frontend**
 
@@ -109,27 +109,26 @@ Oppure registrare un nuovo account dalla pagina di registrazione.
 FitQuestWeb/
 ├── backend/
 │   ├── src/
-│   │   ├── index.ts              # Entry point Express
-│   │   ├── config.ts             # Variabili d'ambiente
-│   │   ├── db/pool.ts            # Connessione PostgreSQL
+│   │   ├── index.js              # Entry point Express
+│   │   ├── config.js             # Variabili d'ambiente
+│   │   ├── db/pool.js            # Connessione PostgreSQL
 │   │   ├── middleware/
-│   │   │   ├── auth.ts           # JWT verification
-│   │   │   └── errorHandler.ts   # Error handler centralizzato
+│   │   │   ├── auth.js           # JWT verification
+│   │   │   └── errorHandler.js   # Error handler centralizzato
 │   │   ├── routes/
-│   │   │   ├── auth.ts           # Register + Login
-│   │   │   ├── user.ts           # Profilo utente
-│   │   │   ├── exercises.ts      # Libreria esercizi
-│   │   │   ├── workouts.ts       # Workout + Set + Complete
-│   │   │   ├── progression.ts    # Progressione gruppi muscolari
-│   │   │   ├── bosses.ts         # Stato boss
-│   │   │   └── streak.ts         # Streak settimanale
-│   │   ├── services/
-│   │   │   ├── xpCalculator.ts   # Formule XP per categoria
-│   │   │   ├── progressionService.ts  # Rank-up logic
-│   │   │   ├── bossService.ts    # Boss names + spawn
-│   │   │   └── streakService.ts  # Streak rollover logic
-│   │   └── types/index.ts        # TypeScript interfaces
-│   └── Dockerfile                # Multi-stage build
+│   │   │   ├── auth.js           # Register + Login
+│   │   │   ├── user.js           # Profilo utente
+│   │   │   ├── exercises.js      # Libreria esercizi
+│   │   │   ├── workouts.js       # Workout + Set + Complete
+│   │   │   ├── progression.js    # Progressione gruppi muscolari
+│   │   │   ├── bosses.js         # Stato boss
+│   │   │   └── streak.js         # Streak settimanale
+│   │   └── services/
+│   │       ├── xpCalculator.js   # Formule XP per categoria
+│   │       ├── progressionService.js  # Rank-up logic
+│   │       ├── bossService.js    # Boss names + spawn
+│   │       └── streakService.js  # Streak rollover logic
+│   └── Dockerfile
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
@@ -199,8 +198,11 @@ JWT stateless: nessun session store lato server, scalabilita orizzontale natural
 ### PostgreSQL vs MongoDB
 Dati fortemente relazionali (utenti → workout → esercizi → set, progressione per gruppo muscolare). Le transazioni ACID sono essenziali per la consistenza del sistema di progressione (rank-up + boss in transazione atomica). Prepared statements eliminano SQL injection.
 
-### Docker Multi-stage
-Build in due fasi (install+compile → runtime) per immagini leggere (~150 MB). Alpine come base. Compose orchestra i 3 servizi con healthcheck e dipendenze.
+### Backend JavaScript (no TypeScript)
+Il backend usa JavaScript puro con ES modules. Nessun step di compilazione: il codice gira direttamente con `node src/index.js`. In sviluppo, Node.js 20 offre `--watch` nativo per il riavvio automatico. Il frontend mantiene TypeScript perche Vite lo gestisce in modo trasparente senza configurazione aggiuntiva.
+
+### Docker
+Dockerfile leggero per il backend (single-stage, copia sorgenti JS + `npm ci`). Multi-stage per il frontend (build React con Vite → serve con Nginx Alpine). Compose orchestra i 3 servizi con healthcheck e dipendenze.
 
 ### Calcolo XP server-side
 L'XP viene calcolato esclusivamente nel backend per evitare manipolazioni client-side. Quattro formule diverse in base alla categoria dell'esercizio, con moltiplicatore streak.
@@ -228,8 +230,7 @@ Pipeline GitHub Actions (`.github/workflows/ci.yml`) su ogni push/PR verso `main
 ```
 Backend Job          Frontend Job
   npm ci               npm ci
-  npm run lint         npm run lint
-  npm run build        npm run build
+  syntax check         vite build
        ↓                    ↓
        └──── Docker Job ────┘
              docker compose build

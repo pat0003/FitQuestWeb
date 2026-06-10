@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MuscleGroupProgress } from '../types';
-import { listProgress } from '../api/progression';
+import { listProgress } from '../api/client';
 import { XPBar } from '../components/XPBar';
 import { RankBadge } from '../components/RankBadge';
 import { BossCard } from '../components/BossCard';

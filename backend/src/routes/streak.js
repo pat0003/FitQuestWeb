@@ -1,40 +1,20 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import { authMiddleware } from '../middleware/auth';
-import { pool } from '../db/pool';
-import { AuthRequest, StreakSummary } from '../types';
-import {
-  StreakStateInput,
-  StreakTier,
-  processWeekRolloverIfNeeded,
-  bonusPctFor,
-} from '../services/streakService';
+import { Router } from 'express';
+import { authMiddleware } from '../middleware/auth.js';
+import { pool } from '../db/pool.js';
+import { processWeekRolloverIfNeeded, bonusPctFor } from '../services/streakService.js';
 
 const router = Router();
 
-router.use((req: Request, res: Response, next: NextFunction) =>
-  authMiddleware(req as AuthRequest, res, next),
-);
+router.use((req, res, next) => authMiddleware(req, res, next));
 
-// ============================================================
-// GET /api/streak — stato corrente
-// Triggera il rollover lazy se la settimana è cambiata, così la lettura
-// è sempre consistente con quanto verrebbe usato dal prossimo /sets.
-// ============================================================
-router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const { userId } = req as AuthRequest;
+router.get('/', async (req, res) => {
+  const { userId } = req;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const stRes = await client.query<{
-      current_streak: number;
-      streak_tier: StreakTier;
-      week_start: Date;
-      workouts_this_week: number;
-      best_streak: number;
-      goal_at_week_start: number;
-    }>(
+    const stRes = await client.query(
       `SELECT current_streak, streak_tier, week_start, workouts_this_week, best_streak, goal_at_week_start
        FROM streak_state WHERE user_id = $1 FOR UPDATE`,
       [userId],
@@ -45,13 +25,13 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const goalRes = await client.query<{ weekly_goal: number }>(
+    const goalRes = await client.query(
       `SELECT weekly_goal FROM users WHERE id = $1`,
       [userId],
     );
     const weeklyGoal = goalRes.rows[0].weekly_goal;
 
-    const state: StreakStateInput = {
+    const state = {
       current_streak: stRes.rows[0].current_streak,
       streak_tier: stRes.rows[0].streak_tier,
       week_start: stRes.rows[0].week_start,
@@ -82,7 +62,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     await client.query('COMMIT');
 
     const finalState = result.state;
-    const summary: StreakSummary = {
+    const summary = {
       current_streak: finalState.current_streak,
       streak_tier: finalState.streak_tier,
       weekly_goal: weeklyGoal,
