@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db/pool.js';
 import { processWeekRolloverIfNeeded, bonusPctFor } from '../services/streakService.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 router.use((req, res, next) => authMiddleware(req, res, next));
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { userId } = req;
 
   const client = await pool.connect();
@@ -78,6 +79,6 @@ router.get('/', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 export default router;

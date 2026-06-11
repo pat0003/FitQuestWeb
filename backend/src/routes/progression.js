@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db/pool.js';
 import { getRankInfo, xpToNextFor, MAX_BAND, MAX_SUB } from '../services/progressionService.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ function enrich(row) {
   };
 }
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { userId } = req;
   const result = await pool.query(
     `SELECT mgp.muscle_group, mgp.total_xp, mgp.current_xp, mgp.rank_band, mgp.rank_sub,
@@ -45,9 +46,9 @@ router.get('/', async (req, res) => {
     [userId],
   );
   res.json(result.rows.map(enrich));
-});
+}));
 
-router.get('/:group', async (req, res) => {
+router.get('/:group', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { group } = req.params;
   const result = await pool.query(
@@ -63,6 +64,6 @@ router.get('/:group', async (req, res) => {
     return;
   }
   res.json(enrich(result.rows[0]));
-});
+}));
 
 export default router;

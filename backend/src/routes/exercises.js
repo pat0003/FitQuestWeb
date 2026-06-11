@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db/pool.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 router.use((req, res, next) => authMiddleware(req, res, next));
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { muscleGroup, category } = req.query;
 
   const filters = [];
@@ -31,6 +32,6 @@ router.get('/', async (req, res) => {
 
   const result = await pool.query(sql, params);
   res.json(result.rows);
-});
+}));
 
 export default router;

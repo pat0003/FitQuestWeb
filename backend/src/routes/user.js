@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db/pool.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 router.use((req, res, next) => authMiddleware(req, res, next));
 
-router.get('/profile', async (req, res) => {
+router.get('/profile', asyncHandler(async (req, res) => {
   const { userId } = req;
   const result = await pool.query(
     `SELECT id, username, email, body_weight_kg, weekly_goal, created_at
@@ -20,9 +21,9 @@ router.get('/profile', async (req, res) => {
   }
 
   res.json({ user: result.rows[0] });
-});
+}));
 
-router.patch('/profile', async (req, res) => {
+router.patch('/profile', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { bodyWeightKg, weeklyGoal } = req.body;
 
@@ -37,6 +38,6 @@ router.patch('/profile', async (req, res) => {
   );
 
   res.json({ user: result.rows[0] });
-});
+}));
 
 export default router;

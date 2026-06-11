@@ -27,6 +27,8 @@ jobs:
         run: npm ci
       - name: Verify syntax
         run: node --check src/index.js
+      - name: Run unit tests
+        run: npm test
 
   # ============================================================
   # Job 2: frontend — install, build (vite)

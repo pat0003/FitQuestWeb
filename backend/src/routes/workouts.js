@@ -9,6 +9,7 @@ import {
 } from '../services/progressionService.js';
 import { bossNameFor } from '../services/bossService.js';
 import { processWeekRolloverIfNeeded } from '../services/streakService.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 async function syncStreakAndGetTier(client, userId) {
   const stRes = await client.query(
@@ -62,7 +63,7 @@ const router = Router();
 router.use((req, res, next) => authMiddleware(req, res, next));
 
 // POST /api/workouts
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { notes } = req.body;
 
@@ -74,10 +75,10 @@ router.post('/', async (req, res) => {
   );
 
   res.status(201).json({ workout: result.rows[0] });
-});
+}));
 
 // GET /api/workouts?limit=10&offset=0
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { userId } = req;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '10'), 10) || 10, 1), 50);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
@@ -92,10 +93,10 @@ router.get('/', async (req, res) => {
   );
 
   res.json(result.rows);
-});
+}));
 
 // GET /api/workouts/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { id } = req.params;
 
@@ -155,10 +156,10 @@ router.get('/:id', async (req, res) => {
   }));
 
   res.json({ workout, exercises });
-});
+}));
 
 // POST /api/workouts/:id/exercises
-router.post('/:id/exercises', async (req, res) => {
+router.post('/:id/exercises', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { id } = req.params;
   const { exerciseId } = req.body;
@@ -202,10 +203,10 @@ router.post('/:id/exercises', async (req, res) => {
   );
 
   res.status(201).json({ workoutExercise: insRes.rows[0] });
-});
+}));
 
 // POST /api/workouts/:id/exercises/:weId/sets
-router.post('/:id/exercises/:weId/sets', async (req, res) => {
+router.post('/:id/exercises/:weId/sets', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { id, weId } = req.params;
   const body = req.body;
@@ -297,10 +298,10 @@ router.post('/:id/exercises/:weId/sets', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 // POST /api/workouts/:id/complete
-router.post('/:id/complete', async (req, res) => {
+router.post('/:id/complete', asyncHandler(async (req, res) => {
   const { userId } = req;
   const { id } = req.params;
 
@@ -471,6 +472,6 @@ router.post('/:id/complete', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 export default router;
