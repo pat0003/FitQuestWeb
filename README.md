@@ -114,7 +114,7 @@ FitQuestWeb/
 │   │   ├── db/pool.js            # Connessione PostgreSQL
 │   │   ├── middleware/
 │   │   │   ├── auth.js           # JWT verification
-│   │   │   └── errorHandler.js   # Error handler centralizzato
+│   │   │   └── errorHandler.js   # Error handler + asyncHandler
 │   │   ├── routes/
 │   │   │   ├── auth.js           # Register + Login
 │   │   │   ├── user.js           # Profilo utente
@@ -124,10 +124,13 @@ FitQuestWeb/
 │   │   │   ├── bosses.js         # Stato boss
 │   │   │   └── streak.js         # Streak settimanale
 │   │   └── services/
-│   │       ├── xpCalculator.js   # Formule XP per categoria
-│   │       ├── progressionService.js  # Rank-up logic
-│   │       ├── bossService.js    # Boss names + spawn
-│   │       └── streakService.js  # Streak rollover logic
+│   │       ├── xpCalculator.js         # Formule XP per categoria
+│   │       ├── xpCalculator.test.js    # Unit test
+│   │       ├── progressionService.js   # Rank-up logic
+│   │       ├── progressionService.test.js # Unit test
+│   │       ├── bossService.js          # Boss names + spawn
+│   │       ├── streakService.js        # Streak rollover logic
+│   │       └── streakService.test.js   # Unit test
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
@@ -207,8 +210,11 @@ Dockerfile leggero per il backend (single-stage, copia sorgenti JS + `npm ci`). 
 ### Calcolo XP server-side
 L'XP viene calcolato esclusivamente nel backend per evitare manipolazioni client-side. Quattro formule diverse in base alla categoria dell'esercizio, con moltiplicatore streak.
 
-### Transazione atomica su Complete
-Il completamento di un workout esegue in una singola transazione: rollover streak → incremento contatore settimanale → applicazione XP per gruppo → rank-up → danno boss → spawn nuovo boss. Se un passo fallisce, tutto viene annullato (ROLLBACK).
+### Transazioni atomiche
+Il completamento di un workout esegue in una singola transazione: rollover streak → incremento contatore settimanale → applicazione XP per gruppo → rank-up → danno boss → spawn nuovo boss. Se un passo fallisce, tutto viene annullato (ROLLBACK). Anche la registrazione utente usa una transazione: creazione utente, inizializzazione progressione (7 gruppi muscolari), spawn boss iniziali (7) e stato streak vengono committati atomicamente.
+
+### Error handling centralizzato
+Tutte le route async sono wrappate da un `asyncHandler` che intercetta le Promise rejected e le instrada verso l'error handler centralizzato di Express. Questo evita che un errore non gestito in una route async crashi il processo Node.js (limitazione di Express 4 che non cattura errori da async middleware).
 
 ## Diagrammi
 
@@ -223,6 +229,21 @@ Tutti i diagrammi sono in formato Mermaid e renderizzano nativamente su GitHub:
 
 **[docs/architecture.md](docs/architecture.md)**
 
+## Test
+
+Il backend include unit test per i tre services principali, eseguiti con il test runner nativo di Node.js 20 (`node:test`). Zero dipendenze aggiuntive.
+
+```bash
+cd backend
+npm test
+```
+
+| File test | Service testato | Copertura |
+|-----------|----------------|-----------|
+| `xpCalculator.test.js` | Formule XP (4 categorie) + validazione input | 17 test |
+| `progressionService.test.js` | Costi rank, avanzamento XP, boss fight, immutabilita | 22 test |
+| `streakService.test.js` | Coefficienti streak, date ISO, rollover settimanale | 15 test |
+
 ## CI/CD
 
 Pipeline GitHub Actions (`.github/workflows/ci.yml`) su ogni push/PR verso `main`:
@@ -231,6 +252,7 @@ Pipeline GitHub Actions (`.github/workflows/ci.yml`) su ogni push/PR verso `main
 Backend Job          Frontend Job
   npm ci               npm ci
   syntax check         vite build
+  unit test (54)
        ↓                    ↓
        └──── Docker Job ────┘
              docker compose build

@@ -219,7 +219,7 @@ flowchart LR
     end
 
     subgraph Jobs["GitHub Actions"]
-        BE_JOB["Backend Job<br/>npm ci → syntax check"]
+        BE_JOB["Backend Job<br/>npm ci → syntax check → unit test"]
         FE_JOB["Frontend Job<br/>npm ci → build"]
         DOCKER_JOB["Docker Job<br/>docker compose build"]
     end
