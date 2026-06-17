@@ -39,3 +39,6 @@ pgdata/
 
 # Coverage
 coverage/
+
+# Claude Code (configurazione locale)
+.claude/

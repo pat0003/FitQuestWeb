@@ -62,24 +62,30 @@ docker compose up --build -d
 
 ## Sviluppo locale (senza Docker)
 
-**1. Database** — Avviare un'istanza PostgreSQL (porta 5432) ed eseguire gli script di inizializzazione:
+Richiede Node.js 20+ e PostgreSQL 16 già avviato sulla porta 5432.
+
+**1. Database** — Creare il database e caricare schema + dati:
 
 ```bash
-psql -U postgres -f database/init.sql
-psql -U postgres -f database/seed_exercises.sql
-psql -U postgres -f database/03_alter.sql
+createdb -U postgres fitquest
+psql -U postgres -d fitquest -f database/init.sql
+psql -U postgres -d fitquest -f database/seed_exercises.sql
+psql -U postgres -d fitquest -f database/03_alter.sql
+psql -U postgres -d fitquest -f database/seed_demo_users.sql
 ```
 
 **2. Backend**
 
 ```bash
 cd backend
-cp .env.example .env  # configurare DATABASE_URL e JWT_SECRET
+cp .env.example .env   # i valori di default funzionano per sviluppo locale
 npm install
 npm run dev
 ```
 
 Il server parte su `http://localhost:3000` con watch mode (riavvio automatico su modifica).
+
+Il file `.env.example` contiene tutti i valori preconfigurati per l'ambiente locale. L'unica variabile da cambiare in produzione è `JWT_SECRET`.
 
 **3. Frontend**
 

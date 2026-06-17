@@ -1,2 +1,0 @@
-- [User profile](user-profile.md) — Patrik Rossi, studente UNICAM, corso Applicazioni Web prof. Lillini
-- [Project exam context](project-exam.md) — FitQuestWeb e un progetto d'esame con criteri di valutazione specifici
